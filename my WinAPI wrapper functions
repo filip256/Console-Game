@@ -1,0 +1,102 @@
+#include<windows.h>
+//a few wrapper functions on the Win32 API, a lot more is possible: https://docs.microsoft.com/en-us/windows/win32/apiindex/windows-api-list
+//works in pure C
+
+#define _WIN32_WINNT 0x0500 //could solve some glitches
+
+//these can be left global or sent as parameters wherever needed
+//check void setup() for initialization
+HWND cHwnd;
+CONSOLE_SCREEN_BUFFER_INFO bufferInfo;
+HANDLE hOutput;
+HANDLE hInput;
+
+void setup()
+{
+    cHwnd = GetConsoleWindow();
+	hOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+	hInput = GetStdHandle(STD_INPUT_HANDLE);
+	GetConsoleScreenBufferInfo(hOutput, &bufferInfo);
+}
+
+void clearScreen()
+{
+    //pastes spaces in the given area (topLeft x bufferInfo.dwSize), the pasted symbol and area can be changed
+    //usually to slow for 30fps
+	COORD topLeft = { 0, 0 };
+	DWORD written;
+	FillConsoleOutputCharacterA(hOutput, ' ', (DWORD)(bufferInfo.dwSize.X * bufferInfo.dwSize.Y), topLeft, &written);
+	FillConsoleOutputAttribute(hOutput, FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_BLUE, (DWORD)(bufferInfo.dwSize.X * bufferInfo.dwSize.Y), topLeft, &written);
+	SetConsoleCursorPosition(hOutput, topLeft);
+}
+
+void drawText(const char* text, const short int x, const short int y, const int fg, const int bg)
+{
+    //draws text at the given position with the given foreground and background color (8-bit CMD colors only)
+    //switching between colors (attribute) is slow so the last color is remembered to avoid useless changes
+	COORD pos; pos.X = x; pos.Y = y;
+	SetConsoleCursorPosition(hOutput, pos);
+	const int attr = fg + bg * 16;
+	static int lastAttrib = -1;
+	if(attr == lastAttrib)
+		printf("%s", text);
+	else
+	{
+		SetConsoleTextAttribute(hOutput, attr);
+		printf("%s", text);
+		lastAttrib = attr;
+	}
+}
+
+void setFont()
+{
+    //to avoid glitches this should be only done once, before any text is drawn and before setting window and buffer size
+	CONSOLE_FONT_INFOEX cfi;
+	cfi.cbSize = sizeof(cfi);
+	cfi.nFont = 0;
+	cfi.dwFontSize.X = 12;                   // Width of each character in the font
+	cfi.dwFontSize.Y = 12;                  // Height
+	cfi.FontFamily = FF_DONTCARE;
+	cfi.FontWeight = FW_NORMAL;
+	wcscpy_s(cfi.FaceName, 32, L"Lucida Console"); // Choose the font from the console options (Consolas, Lucida Console, Courier New, ...)
+	SetCurrentConsoleFontEx(hOutput, FALSE, &cfi);
+}
+
+void setWindowSize()
+{
+    //Setting the window size
+	RECT r;
+	GetWindowRect(cHwnd, &r);       //X  //Y
+	MoveWindow(cHwnd, r.left, r.top, 960, 600, TRUE);
+
+	//Corelating buffer to the size
+	//In order to remove the scrolls on the sides these values must be matched to the window size and font size
+	COORD size = { 58 , 35 };
+	SetConsoleScreenBufferSize(hOutput, size);
+}
+
+void SetCursor()
+{
+    CONSOLE_CURSOR_INFO cursorInfo;
+	GetConsoleCursorInfo(hOutput, &cursorInfo);
+	cursorInfo.bVisible = false; //visible or not
+	cursorInfo.dwSize = 1; //height of the cursor
+	SetConsoleCursorInfo(hOutput, &cursorInfo);
+}
+
+void disableSelecting()
+{
+    DWORD prev_mode;
+	GetConsoleMode(hInput, &prev_mode);
+	SetConsoleMode(hInput, prev_mode & ~ENABLE_QUICK_EDIT_MODE);
+}
+
+//disable resize to avoid glitches
+SetWindowLong(cHwnd, GWL_STYLE, GetWindowLong(cHwnd, GWL_STYLE) & ~WS_MAXIMIZEBOX & ~WS_SIZEBOX);
+
+//set the consle title
+SetConsoleTitle(TEXT("Title"));
+
+if (GetKeyState('A') & 0x8000) //checks if A is pressed at the call time (no enter needed)
+
+Sleep(10); //stops the program for the given milliseconds
